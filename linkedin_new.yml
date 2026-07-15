@@ -1,0 +1,39 @@
+name: LinkedIn - Post New Articles
+
+on:
+  schedule:
+    # يعمل كل 3 ساعات (يمكنك تعديلها حسب رغبتك)
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # للتشغيل اليدوي عند الحاجة
+
+jobs:
+  check-and-post-new:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # مهم جداً لكي يتمكن الـ Action من حفظ الملف النصي وتحديث الذاكرة
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install Dependencies
+      run: pip install requests feedparser
+
+    - name: Run Script for New Posts
+      env:
+        LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+        LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
+      run: python post_to_linkedin.py --new
+
+    - name: Commit and Push Database Changes
+      run: |
+        git config --global user.name "GitHub Action Bot"
+        git config --global user.email "action@github.com"
+        git add posted_links.txt
+        git commit -m "Update posted links database [skip ci]" || exit 0
+        git push
