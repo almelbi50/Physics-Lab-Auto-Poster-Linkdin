@@ -8,8 +8,9 @@ import feedparser
 ACCESS_TOKEN = os.environ.get("LINKEDIN_ACCESS_TOKEN")
 AUTHOR_URN = os.environ.get("LINKEDIN_AUTHOR_URN")
 
-# رابط الـ RSS لموقعك (تأكد من تعديله لرابط موقعك الفعلي)
-RSS_URL = "https://www.phy-lab.com/feed" 
+# روابط الموقع (تم تحديثها لتكون أكثر دقة)
+SITE_URL = "https://phy-lab.com" 
+RSS_URL = f"{SITE_URL}/feed"
 
 DB_FILE = "posted_links.txt"
 
@@ -40,7 +41,7 @@ def post_to_linkedin(title, link, context_text=""):
         "specificContent": {
             "com.linkedin.ugc.ShareContent": {
                 "shareCommentary": {
-                    "text": f"{context_text}\n\n{title}\n\nتفضلوا بالقراءة عبر الرابط:"
+                    "text": f"{context_text}\n\n{title}\n\nتفضلوا بالقراءة عبر الرابط:\n{link}"
                 },
                 "shareMediaCategory": "ARTICLE",
                 "media": [
@@ -69,7 +70,6 @@ def handle_new_posts():
     posted = load_posted_links()
     feed = feedparser.parse(RSS_URL)
     
-    # الفحص من الأقدم للأحدث في التغذية الحالية
     new_posts_found = False
     for entry in reversed(feed.entries):
         if entry.link not in posted:
@@ -81,42 +81,62 @@ def handle_new_posts():
         print("لا توجد مقالات جديدة في الوقت الحالي.")
 
 def handle_old_posts():
-    """جلب مقال قديم عشوائي لم يتم نشره مسبقاً"""
+    """جلب مقال قديم عشوائي بطريقة السحب المجمع"""
     posted = load_posted_links()
-    wp_api_url = RSS_URL.replace("/feed", "/wp-json/wp/v2/posts")
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     
+    # 1. محاولة جلب المقالات عبر WordPress API (لحد 100 مقال)
     try:
-        # محاولة جلب المقالات عبر WordPress API للحصول على أرشيف أكبر
-        # جلب أول صفحة لمعرفة عدد الصفحات الكلي
-        res = requests.get(f"{wp_api_url}?per_page=1")
+        wp_url = f"{SITE_URL}/wp-json/wp/v2/posts?per_page=100"
+        res = requests.get(wp_url, headers=headers, timeout=10)
         if res.status_code == 200:
-            total_pages = int(res.headers.get('X-WP-TotalPages', 1))
-            # محاولة العثور على مقال غير منشور باختيار صفحات عشوائية
-            for _ in range(10): # محاولة 10 مرات كحد أقصى
-                random_page = random.randint(1, total_pages)
-                page_res = requests.get(f"{wp_api_url}?per_page=10&page={random_page}")
-                if page_res.status_code == 200:
-                    posts = page_res.json()
-                    unposted = [p for p in posts if p['link'] not in posted]
-                    if unposted:
-                        selected = random.choice(unposted)
-                        title = selected['title']['rendered']
-                        link = selected['link']
-                        post_to_linkedin(title, link, "📚 من أرشيف معامل الفيزياء (مقال قديم نُعيده للفائدة):")
-                        return
-            print("لم نجد مقال قديم غير منشور في الصفحات العشوائية التي تم فحصها.")
-            return
-    except Exception as e:
-        print(f"تعذر استخدام WordPress API، سيتم الاعتماد على الـ RSS: {e}")
+            posts = res.json()
+            if isinstance(posts, list) and len(posts) > 0:
+                unposted = [p for p in posts if p.get('link') not in posted]
+                if unposted:
+                    selected = random.choice(unposted)
+                    title = selected.get('title', {}).get('rendered', 'موضوع فيزيائي')
+                    link = selected.get('link')
+                    post_to_linkedin(title, link, "📚 من أرشيف معامل الفيزياء (مقال نُعيده للفائدة):")
+                    return
+    except Exception:
+        pass
 
-    # حل بديل (Fallback) في حال لم يكن الموقع ووردبريس أو فشل الـ API
-    feed = feedparser.parse(RSS_URL)
-    unposted = [e for e in feed.entries if e.link not in posted]
-    if unposted:
-        selected = random.choice(unposted)
-        post_to_linkedin(selected.title, selected.link, "📖 اخترنا لكم من مكتبة معامل الفيزياء:")
-    else:
-        print("لم يتم العثور على مقالات غير منشورة في التغذية الحالية.")
+    # 2. محاولة جلب المقالات عبر Blogger API (إذا كان الموقع مدعوماً ببلوجر)
+    try:
+        blogger_url = f"{SITE_URL}/feeds/posts/default?max-results=150&alt=json"
+        res = requests.get(blogger_url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            entries = data.get('feed', {}).get('entry', [])
+            if entries:
+                unposted = []
+                for entry in entries:
+                    title = entry.get('title', {}).get('$t', '')
+                    links = entry.get('link', [])
+                    link = next((l['href'] for l in links if l.get('rel') == 'alternate'), None)
+                    if link and link not in posted:
+                        unposted.append((title, link))
+                
+                if unposted:
+                    title, link = random.choice(unposted)
+                    post_to_linkedin(title, link, "📚 من أرشيف معامل الفيزياء (مقال نُعيده للفائدة):")
+                    return
+    except Exception:
+        pass
+
+    # 3. الحل الأخير (Fallback) باستخدام RSS العادي
+    try:
+        feed = feedparser.parse(RSS_URL)
+        unposted = [e for e in feed.entries if e.link not in posted]
+        if unposted:
+            selected = random.choice(unposted)
+            post_to_linkedin(selected.title, selected.link, "📖 اخترنا لكم من مكتبة معامل الفيزياء:")
+            return
+    except Exception:
+        pass
+
+    print("لم يتم العثور على مقالات قديمة غير منشورة في الأرشيف المتاح.")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--old":
