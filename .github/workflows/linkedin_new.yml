@@ -30,10 +30,11 @@ jobs:
         LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
       run: python post_to_linkedin.py --new
 
-    - name: Commit and Push Database Changes
+   - name: Commit and Push Database Changes
       run: |
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "action@github.com"
+        touch posted_links.txt
         git add posted_links.txt
         git commit -m "Update posted links database [skip ci]" || exit 0
         git push
