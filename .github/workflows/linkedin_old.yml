@@ -2,15 +2,14 @@ name: LinkedIn - Post Old Archive Articles
 
 on:
   schedule:
-    # يعمل مرة واحدة يومياً الساعة 1:00 ظهراً بتوقيت UTC (عدّلها بما يناسب جمهورك)
     - cron: '0 13 * * *'
-  workflow_dispatch: # للتشغيل اليدوي للتجربة الفورية
+  workflow_dispatch:
 
 jobs:
   post-old-archive:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # مهم جداً لتحديث الذاكرة ومنع التكرار
+      contents: write
 
     steps:
     - name: Checkout Repository
@@ -30,7 +29,7 @@ jobs:
         LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
       run: python post_to_linkedin.py --old
 
-  - name: Commit and Push Database Changes
+    - name: Commit and Push Database Changes
       run: |
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "action@github.com"
