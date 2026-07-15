@@ -6,7 +6,7 @@ import feedparser
 
 # جلب البيانات من GitHub Secrets
 ACCESS_TOKEN = os.environ.get("LINKEDIN_ACCESS_TOKEN")
-# تأكد أن هذا المتغير في GitHub هو: urn:li:organization:135266917
+# تأكد أن هذا المتغير في GitHub هو: urn:li:person:68172092
 AUTHOR_URN = os.environ.get("LINKEDIN_AUTHOR_URN")
 
 SITE_URL = "https://phy-lab.com" 
@@ -31,9 +31,9 @@ def post_to_linkedin(title, link, context_text=""):
         "X-Restli-Protocol-Version": "2.0.0"
     }
     
-    # الكود المحدث للنشر المباشر كمدير للصفحة
+    # النشر كفرد (شخصي) وهو المسار الأضمن والأسرع
     post_data = {
-        "author": AUTHOR_URN,
+        "author": AUTHOR_URN, 
         "lifecycleState": "PUBLISHED",
         "specificContent": {
             "com.linkedin.ugc.ShareContent": {
@@ -57,10 +57,10 @@ def post_to_linkedin(title, link, context_text=""):
 
     response = requests.post(url, headers=headers, json=post_data)
     if response.status_code == 201:
-        print(f"نجاح: تم النشر بنجاح على صفحة معامل الفيزياء!")
+        print(f"نجاح: تم النشر بنجاح على حسابك الشخصي!")
         save_posted_link(link)
     else:
-        print(f"فشل النشر: {response.text}")
+        print(f"فشل النشر، نص الخطأ: {response.text}")
 
 def handle_new_posts():
     posted = load_posted_links()
@@ -68,11 +68,10 @@ def handle_new_posts():
     for entry in reversed(feed.entries):
         if entry.link not in posted:
             post_to_linkedin(entry.title, entry.link, "🎯 جديد معامل الفيزياء:")
-            return # للنشر مقال واحد فقط في كل دورة
+            return 
 
 def handle_old_posts():
     posted = load_posted_links()
-    # جلب من RSS كطريقة مضمونة
     feed = feedparser.parse(RSS_URL)
     unposted = [e for e in feed.entries if e.link not in posted]
     if unposted:
